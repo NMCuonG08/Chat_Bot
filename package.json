@@ -1,0 +1,14 @@
+{
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "@langchain/community": "^0.3.21",
+    "@pinecone-database/pinecone": "^4.0.0",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mysql2": "^3.12.0",
+    "openai": "^4.77.0"
+  }
+}

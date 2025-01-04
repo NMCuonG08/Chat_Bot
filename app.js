@@ -4,12 +4,21 @@ const fs = require('fs');
 const { getDataFromDatabase } = require('./db');
 require('dotenv').config();
 const { OllamaEmbeddings } = require("@langchain/community/embeddings/ollama");
-
+const keywordExtractor = require('keyword-extractor');
+const path = require('path');
 const app = express();
+//const FormData = require('form-data');
+const { google } = require('googleapis');
+
 app.use(express.json());
 
 let embeddingsData = []; // Mảng lưu embeddings từ tệp JSON
+app.use(express.static(path.join(__dirname, 'public')));
 
+// Add route for HTML page
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 // Hàm tạo embedding
 async function createEmbedding(text) {
     try {
@@ -60,10 +69,72 @@ async function upsertDataToJSON(data) {
 async function queryDataFromJSON(queryEmbedding) {
     // Giả lập tìm kiếm dữ liệu dựa trên độ tương đồng cosine (sử dụng vector queryEmbedding)
     // Trong ví dụ này, chúng ta chỉ lấy top 5 kết quả gần nhất.
-    return embeddingsData.slice(0, 5).map((item) => item.metadata.text);
+    return embeddingsData.slice(0, 30).map((item) => item.metadata.text);
+}
+// async function generateImage(prompt) {
+//     try {
+//         const formData = new FormData();
+//         formData.append('prompt', prompt);
+//         formData.append('output_format', 'webp');
+
+//         const response = await axios.post(
+//             'https://api.stability.ai/v2beta/stable-image/generate/ultra',
+//             formData,
+//             {
+//                 headers: {
+//                     'Accept': 'image/*',
+//                     'Authorization': `Bearer ${process.env.STABILITY_API_KEY}`
+//                 },
+//                 responseType: 'arraybuffer'
+//             }
+//         );
+
+//         const base64Image = Buffer.from(response.data).toString('base64');
+//         return `data:image/webp;base64,${base64Image}`;
+//     } catch (error) {
+//         if (error.response) {
+//             console.error(`Error: ${error.response.status} - ${error.response.data}`);
+//         } else {
+//             console.error('Error:', error.message);
+//         }
+//         return null;
+//     }
+// }
+async function fetchImage(prompt) {
+    const customsearch = google.customsearch('v1');
+    const API_KEY = process.env.GG_SEARCH_API_KEY; // Thay bằng API Key của bạn
+    const CX = process.env.GG_SEARCH_CX;   // Thay bằng Search Engine ID của bạn
+
+    try {
+        // Gửi yêu cầu tìm kiếm hình ảnh
+        const response = await customsearch.cse.list({
+            auth: API_KEY,
+            cx: CX,
+            q: prompt,
+            searchType: 'image',
+            num: 1, // Số lượng hình ảnh muốn lấy
+        });
+
+        if (response.data.items && response.data.items.length > 0) {
+            // Lấy URL của hình ảnh đầu tiên
+            const imageUrl = response.data.items[0].link;
+
+            // Tải hình ảnh về dưới dạng base64
+            const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+            const base64Image = Buffer.from(imageResponse.data).toString('base64');
+            return `data:image/jpeg;base64,${base64Image}`; // Định dạng hình ảnh (jpeg, png, ...)
+        } else {
+            console.error('No images found for the given prompt.');
+            return null;
+        }
+    } catch (error) {
+        console.error('Error fetching image:', error.message);
+        return null;
+    }
 }
 
-// Sinh câu trả lời bằng Groq
+// Ví dụ sử dụng
+
 async function generateAnswer(context, question) {
     try {
         const prompt = `Answer the question based only on the following context:\n\n${context}\n\nQuestion: ${question}`;
@@ -84,26 +155,59 @@ async function generateAnswer(context, question) {
 }
 
 // API để xử lý câu hỏi
+// app.post('/ask', async (req, res) => {
+//     const { question } = req.body;
+
+//     try {
+//         // Tạo embedding cho câu hỏi
+//         const questionEmbedding = await createEmbedding(question);
+
+//         // Truy vấn dữ liệu từ tệp JSON
+//         const relevantDocs = await queryDataFromJSON(questionEmbedding);
+
+//         // Kết hợp nội dung từ các tài liệu
+//         const context = relevantDocs.join('\n');
+
+//         // Sinh câu trả lời
+//         const answer = await generateAnswer(context, question);
+
+//         res.json({ answer });
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ error: 'Something went wrong' });
+//     }
+// });
+
 app.post('/ask', async (req, res) => {
     const { question } = req.body;
 
     try {
-        // Tạo embedding cho câu hỏi
         const questionEmbedding = await createEmbedding(question);
-
-        // Truy vấn dữ liệu từ tệp JSON
         const relevantDocs = await queryDataFromJSON(questionEmbedding);
-
-        // Kết hợp nội dung từ các tài liệu
         const context = relevantDocs.join('\n');
-
-        // Sinh câu trả lời
         const answer = await generateAnswer(context, question);
+            
 
-        res.json({ answer });
+        
+        // try {
+           
+        //    imageBase64 = await fetchImage('beautiful landscape')
+        // } catch (imageError) {
+        //     console.error('Image generation failed:', imageError);
+        //     // Continue without image if generation fails
+        // }
+
+        res.json({ 
+            answer,
+         //   image: imageBase64 ,
+            
+        });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Something went wrong' });
+        console.error('Error processing request:', error);
+        res.status(500).json({ 
+            error: 'An error occurred while processing your request',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 });
 

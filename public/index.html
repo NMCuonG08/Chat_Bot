@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Chat Assistant</title>
+    <link rel="stylesheet" >
+    <style>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .chat-box {
+            margin: 20px 0;
+        }
+        
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin-bottom: 10px;
+        }
+        
+        .answer-box {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            min-height: 100px;
+        }
+        
+        .image-container img {
+            max-width: 100%;
+            margin-top: 20px;
+        }
+        
+        .loading {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Chat Assistant</h1>
+        <div class="chat-box">
+            <textarea id="question" placeholder="Ask your question..."></textarea>
+            <button onclick="askQuestion()">Ask</button>
+        </div>
+        <div id="loading" class="loading hidden">Loading...</div>
+        <div id="answer" class="answer-box"></div>
+        <div id="image-container" class="image-container"></div>
+    </div>
+    
+    <script>
+        async function askQuestion() {
+            const question = document.getElementById('question').value;
+            const loading = document.getElementById('loading');
+            const answerBox = document.getElementById('answer');
+            const imageContainer = document.getElementById('image-container');
+        
+            loading.classList.remove('hidden');
+            answerBox.innerHTML = '';
+            imageContainer.innerHTML = '';
+        
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ question })
+                });
+        
+                const data = await response.json();
+                
+                answerBox.innerHTML = data.answer;
+                
+                if (data.image) {
+                    const img = document.createElement('img');
+                    img.src = data.image;
+                    imageContainer.appendChild(img);
+                }
+            } catch (error) {
+                answerBox.innerHTML = 'Error: ' + error.message;
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
